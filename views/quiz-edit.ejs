@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Редактирование квиза</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
+    <div class="container">
+      <a class="navbar-brand" href="/dashboard">VK Quiz App</a>
+      <div>
+        <span class="me-3"><%= user.username %></span>
+        <a href="/logout" class="btn btn-outline-secondary btn-sm">Выйти</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <div class="mb-4">
+      <h1><%= quiz.title %></h1>
+      <p class="text-muted mb-1">Категория: <%= quiz.category || 'Без категории' %></p>
+      <p class="text-muted mb-1">Время на вопрос: <%= quiz.time_limit %> сек.</p>
+      <p class="text-muted">Правила: <%= quiz.rules || 'Не указаны' %></p>
+
+      <a href="/dashboard" class="btn btn-outline-secondary btn-sm">Назад в кабинет</a>
+      <a href="/quizzes/<%= quiz.id %>/start" class="btn btn-success btn-sm">Запустить квиз</a>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-body">
+            <h2 class="h4 mb-3">Добавить вопрос</h2>
+
+            <form method="post" action="/quizzes/<%= quiz.id %>/questions">
+              <div class="mb-3">
+                <label class="form-label">Текст вопроса</label>
+                <textarea class="form-control" name="text" rows="3" required></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Ссылка на изображение</label>
+                <input class="form-control" name="image_url" placeholder="Необязательно">
+                <div class="form-text">Можно оставить пустым. Если нужна картинка — вставьте URL.</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Тип вопроса</label>
+                <select class="form-select" name="question_type">
+                  <option value="single">Одиночный выбор</option>
+                  <option value="multiple">Множественный выбор</option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Варианты ответа</label>
+
+                <div class="input-group mb-2">
+                  <span class="input-group-text">
+                    <input type="checkbox" name="correct_options" value="1">
+                  </span>
+                  <input class="form-control" name="option_1" placeholder="Вариант 1" required>
+                </div>
+
+                <div class="input-group mb-2">
+                  <span class="input-group-text">
+                    <input type="checkbox" name="correct_options" value="2">
+                  </span>
+                  <input class="form-control" name="option_2" placeholder="Вариант 2" required>
+                </div>
+
+                <div class="input-group mb-2">
+                  <span class="input-group-text">
+                    <input type="checkbox" name="correct_options" value="3">
+                  </span>
+                  <input class="form-control" name="option_3" placeholder="Вариант 3">
+                </div>
+
+                <div class="input-group mb-2">
+                  <span class="input-group-text">
+                    <input type="checkbox" name="correct_options" value="4">
+                  </span>
+                  <input class="form-control" name="option_4" placeholder="Вариант 4">
+                </div>
+
+                <div class="form-text">
+                  Отметьте галочкой правильный вариант. Для множественного выбора можно отметить несколько.
+                </div>
+              </div>
+
+              <button class="btn btn-primary w-100" type="submit">Добавить вопрос</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <h2 class="h4 mb-3">Вопросы квиза</h2>
+
+        <% if (questions.length === 0) { %>
+          <div class="alert alert-info">
+            Пока нет вопросов. Добавьте первый вопрос слева.
+          </div>
+        <% } %>
+
+        <% questions.forEach(function(question, index) { %>
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h3 class="h5">Вопрос <%= index + 1 %></h3>
+                  <p class="mb-1"><%= question.text %></p>
+                  <p class="text-muted mb-2">
+                    Тип: <%= question.question_type === 'multiple' ? 'множественный выбор' : 'одиночный выбор' %>
+                  </p>
+                </div>
+
+                <form method="post" action="/quizzes/<%= quiz.id %>/questions/<%= question.id %>/delete">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">Удалить</button>
+                </form>
+              </div>
+
+              <% if (question.image_url) { %>
+                <img src="<%= question.image_url %>" alt="Изображение к вопросу" class="img-fluid rounded mb-3 quiz-image">
+              <% } %>
+
+              <ul class="list-group">
+                <% question.options.forEach(function(option) { %>
+                  <li class="list-group-item d-flex justify-content-between">
+                    <span><%= option.text %></span>
+
+                    <% if (option.is_correct) { %>
+                      <span class="badge text-bg-success">Правильный</span>
+                    <% } %>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

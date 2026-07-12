@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Создание квиза</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
+    <div class="container">
+      <a class="navbar-brand" href="/dashboard">VK Quiz App</a>
+      <div>
+        <span class="me-3"><%= user.username %></span>
+        <a href="/logout" class="btn btn-outline-secondary btn-sm">Выйти</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <h1 class="mb-4">Создание квиза</h1>
+
+    <% if (error) { %>
+      <div class="alert alert-danger"><%= error %></div>
+    <% } %>
+
+    <form method="post" action="/quizzes" class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Название квиза</label>
+          <input class="form-control" name="title" placeholder="Например: IT-квиз" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Категория</label>
+          <input class="form-control" name="category" placeholder="Например: Программирование">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Время на вопрос, секунд</label>
+          <input class="form-control" name="time_limit" type="number" value="30" min="5" max="300">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Правила проведения</label>
+          <textarea class="form-control" name="rules" rows="4">За правильный ответ начисляется 1 балл. Победитель определяется по сумме баллов.</textarea>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Создать квиз</button>
+        <a href="/dashboard" class="btn btn-outline-secondary">Назад</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

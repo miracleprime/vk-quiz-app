@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>VK Quiz App</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="container py-5">
+    <div class="text-center">
+      <h1 class="mb-3">VK Quiz App</h1>
+      <p class="lead">MVP веб-приложения для проведения интерактивных квизов в реальном времени.</p>
+
+      <% if (user) { %>
+        <a href="/dashboard" class="btn btn-primary">Перейти в кабинет</a>
+        <a href="/logout" class="btn btn-outline-secondary">Выйти</a>
+      <% } else { %>
+        <a href="/login" class="btn btn-primary">Войти</a>
+        <a href="/register" class="btn btn-outline-primary">Регистрация</a>
+      <% } %>
+    </div>
+  </main>
+</body>
+</html>

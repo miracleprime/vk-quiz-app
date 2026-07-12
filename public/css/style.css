@@ -1,0 +1,24 @@
+body {
+  background: #f5f7fb;
+}
+
+.auth-card {
+  max-width: 420px;
+  padding: 32px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.card {
+  border-radius: 16px;
+}
+
+.btn {
+  border-radius: 10px;
+}
+
+.quiz-image {
+  max-height: 240px;
+  object-fit: cover;
+}

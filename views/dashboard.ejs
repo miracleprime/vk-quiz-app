@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Личный кабинет</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
+    <div class="container">
+      <a class="navbar-brand" href="/">VK Quiz App</a>
+      <div>
+        <span class="me-3"><%= user.username %></span>
+        <a href="/logout" class="btn btn-outline-secondary btn-sm">Выйти</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <h1>Личный кабинет</h1>
+        <p class="text-muted mb-0">Управление квизами и история проведённых игр.</p>
+      </div>
+
+      <a href="/quizzes/new" class="btn btn-primary">Создать квиз</a>
+    </div>
+
+    <% if (quizzes.length === 0) { %>
+      <div class="alert alert-info">
+        Пока нет созданных квизов. Нажмите «Создать квиз», чтобы добавить первый.
+      </div>
+    <% } else { %>
+      <div class="row g-3">
+        <% quizzes.forEach(function(quiz) { %>
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title"><%= quiz.title %></h5>
+                <p class="card-text">
+                  Категория: <%= quiz.category || 'Без категории' %><br>
+                  Время на вопрос: <%= quiz.time_limit %> сек.
+                </p>
+                <a href="/quizzes/<%= quiz.id %>/edit" class="btn btn-outline-primary btn-sm">Редактировать</a>
+                <a href="/quizzes/<%= quiz.id %>/start" class="btn btn-success btn-sm">Запустить</a>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>
