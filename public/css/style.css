@@ -22,3 +22,28 @@ body {
   max-height: 240px;
   object-fit: cover;
 }
+
+.room-code-box {
+  padding: 24px;
+  background: #eef4ff;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.room-code {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: 6px;
+}
+
+.player-card {
+  max-width: 560px;
+}
+
+.answer-option {
+  cursor: pointer;
+}
+
+.answer-option:hover {
+  background: #f0f6ff;
+}

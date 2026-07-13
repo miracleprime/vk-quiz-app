@@ -32,6 +32,104 @@ function hashPassword(password, salt) {
     .toString('hex');
 }
 
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+
+  for (let i = 0; i < 5; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+
+  return code;
+}
+
+async function getQuestionPayload(questionId) {
+  const question = await get(
+    'SELECT * FROM questions WHERE id = ?',
+    [questionId]
+  );
+
+  if (!question) {
+    return null;
+  }
+
+  const options = await all(
+    'SELECT id, text FROM answer_options WHERE question_id = ? ORDER BY id ASC',
+    [questionId]
+  );
+
+  return {
+    id: question.id,
+    text: question.text,
+    imageUrl: question.image_url,
+    questionType: question.question_type,
+    options
+  };
+}
+
+async function getLeaderboard(roomId) {
+  return await all(
+    'SELECT name, score FROM participants WHERE room_id = ? ORDER BY score DESC, joined_at ASC',
+    [roomId]
+  );
+}
+
+async function getNextQuestion(roomId) {
+  const room = await get(
+    'SELECT * FROM rooms WHERE id = ?',
+    [roomId]
+  );
+
+  if (!room) {
+    return null;
+  }
+
+  const questions = await all(
+    `
+    SELECT questions.*
+    FROM questions
+    JOIN rooms ON questions.quiz_id = rooms.quiz_id
+    WHERE rooms.id = ?
+    ORDER BY questions.position ASC, questions.id ASC
+    `,
+    [roomId]
+  );
+
+  if (questions.length === 0) {
+    return null;
+  }
+
+  if (!room.current_question_id) {
+    return questions[0];
+  }
+
+  const currentIndex = questions.findIndex(
+    (question) => question.id === room.current_question_id
+  );
+
+  if (currentIndex === -1 || currentIndex + 1 >= questions.length) {
+    return null;
+  }
+
+  return questions[currentIndex + 1];
+}
+
+async function checkAnswer(questionId, selectedOptionIds) {
+  const correctOptions = await all(
+    'SELECT id FROM answer_options WHERE question_id = ? AND is_correct = 1 ORDER BY id ASC',
+    [questionId]
+  );
+
+  const correctIds = correctOptions.map((option) => Number(option.id)).sort();
+  const selectedIds = selectedOptionIds.map((id) => Number(id)).sort();
+
+  if (correctIds.length !== selectedIds.length) {
+    return false;
+  }
+
+  return correctIds.every((id, index) => id === selectedIds[index]);
+}
+
 function requireAuth(req, res, next) {
   if (!req.session.user) {
     return res.redirect('/login');
@@ -152,18 +250,365 @@ app.get('/dashboard', requireAuth, async (req, res) => {
   });
 });
 
-io.on('connection', (socket) => {
-  console.log('Пользователь подключился:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('Пользователь отключился:', socket.id);
-  });
-});
-
 app.get('/quizzes/new', requireAuth, (req, res) => {
   res.render('quiz-new', {
     user: req.session.user,
     error: null
+  });
+});
+
+app.get('/quizzes/:id/start', requireAuth, async (req, res) => {
+  try {
+    const quizId = req.params.id;
+
+    const quiz = await get(
+      'SELECT * FROM quizzes WHERE id = ? AND user_id = ?',
+      [quizId, req.session.user.id]
+    );
+
+    if (!quiz) {
+      return res.redirect('/dashboard');
+    }
+
+    const questionCount = await get(
+      'SELECT COUNT(*) as count FROM questions WHERE quiz_id = ?',
+      [quizId]
+    );
+
+    if (questionCount.count === 0) {
+      return res.redirect(`/quizzes/${quizId}/edit`);
+    }
+
+    let code = generateRoomCode();
+
+    while (await get('SELECT * FROM rooms WHERE code = ?', [code])) {
+      code = generateRoomCode();
+    }
+
+    const roomResult = await run(
+      `
+      INSERT INTO rooms (quiz_id, code, status)
+      VALUES (?, ?, ?)
+      `,
+      [quizId, code, 'waiting']
+    );
+
+    res.redirect(`/rooms/${roomResult.lastID}/host`);
+  } catch (error) {
+    console.error(error);
+    res.redirect('/dashboard');
+  }
+});
+
+app.get('/rooms/:id/host', requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.id;
+
+    const room = await get(
+      `
+      SELECT rooms.*, quizzes.title, quizzes.category, quizzes.time_limit, quizzes.rules, quizzes.user_id
+      FROM rooms
+      JOIN quizzes ON rooms.quiz_id = quizzes.id
+      WHERE rooms.id = ?
+      `,
+      [roomId]
+    );
+
+    if (!room || room.user_id !== req.session.user.id) {
+      return res.redirect('/dashboard');
+    }
+
+    const participants = await all(
+      'SELECT * FROM participants WHERE room_id = ? ORDER BY score DESC, joined_at ASC',
+      [roomId]
+    );
+
+    res.render('room-host', {
+      user: req.session.user,
+      room,
+      participants
+    });
+  } catch (error) {
+    console.error(error);
+    res.redirect('/dashboard');
+  }
+});
+
+app.get('/join', (req, res) => {
+  res.render('join', {
+    error: null
+  });
+});
+
+app.post('/join', async (req, res) => {
+  try {
+    const { name, code } = req.body;
+
+    if (!name || !code) {
+      return res.render('join', {
+        error: 'Введите имя и код комнаты'
+      });
+    }
+
+    const room = await get(
+      `
+      SELECT rooms.*, quizzes.title
+      FROM rooms
+      JOIN quizzes ON rooms.quiz_id = quizzes.id
+      WHERE rooms.code = ?
+      `,
+      [code.trim().toUpperCase()]
+    );
+
+    if (!room) {
+      return res.render('join', {
+        error: 'Комната с таким кодом не найдена'
+      });
+    }
+
+    if (room.status === 'finished') {
+      return res.render('join', {
+        error: 'Этот квиз уже завершён'
+      });
+    }
+
+    const participantResult = await run(
+      `
+      INSERT INTO participants (room_id, name, score)
+      VALUES (?, ?, ?)
+      `,
+      [room.id, name.trim(), 0]
+    );
+
+    res.redirect(`/rooms/${room.id}/player?participantId=${participantResult.lastID}`);
+  } catch (error) {
+    console.error(error);
+    res.render('join', {
+      error: 'Ошибка подключения к комнате'
+    });
+  }
+});
+
+app.get('/rooms/:id/player', async (req, res) => {
+  try {
+    const roomId = req.params.id;
+    const participantId = req.query.participantId;
+
+    const room = await get(
+      `
+      SELECT rooms.*, quizzes.title, quizzes.category, quizzes.time_limit, quizzes.rules
+      FROM rooms
+      JOIN quizzes ON rooms.quiz_id = quizzes.id
+      WHERE rooms.id = ?
+      `,
+      [roomId]
+    );
+
+    const participant = await get(
+      'SELECT * FROM participants WHERE id = ? AND room_id = ?',
+      [participantId, roomId]
+    );
+
+    if (!room || !participant) {
+      return res.redirect('/join');
+    }
+
+    res.render('room-player', {
+      room,
+      participant
+    });
+  } catch (error) {
+    console.error(error);
+    res.redirect('/join');
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Пользователь подключился:', socket.id);
+
+  socket.on('host-join-room', async ({ roomId }) => {
+    socket.join(`room-${roomId}`);
+
+    const participants = await all(
+      'SELECT * FROM participants WHERE room_id = ? ORDER BY score DESC, joined_at ASC',
+      [roomId]
+    );
+
+    io.to(`room-${roomId}`).emit('participants-updated', participants);
+
+    const room = await get(
+      'SELECT * FROM rooms WHERE id = ?',
+      [roomId]
+    );
+
+    if (room && room.current_question_id && room.status === 'active') {
+      const questionPayload = await getQuestionPayload(room.current_question_id);
+      socket.emit('question-show', questionPayload);
+    }
+  });
+
+  socket.on('player-join-room', async ({ roomId, participantId }) => {
+    socket.join(`room-${roomId}`);
+
+    const participant = await get(
+      'SELECT * FROM participants WHERE id = ? AND room_id = ?',
+      [participantId, roomId]
+    );
+
+    if (!participant) {
+      return;
+    }
+
+    const participants = await all(
+      'SELECT * FROM participants WHERE room_id = ? ORDER BY score DESC, joined_at ASC',
+      [roomId]
+    );
+
+    io.to(`room-${roomId}`).emit('participants-updated', participants);
+
+    const room = await get(
+      'SELECT * FROM rooms WHERE id = ?',
+      [roomId]
+    );
+
+    if (room && room.current_question_id && room.status === 'active') {
+      const questionPayload = await getQuestionPayload(room.current_question_id);
+      socket.emit('question-show', questionPayload);
+    }
+  });
+
+  socket.on('host-next-question', async ({ roomId }) => {
+    const nextQuestion = await getNextQuestion(roomId);
+
+    if (!nextQuestion) {
+      await run(
+        'UPDATE rooms SET status = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ?',
+        ['finished', roomId]
+      );
+
+      const leaderboard = await getLeaderboard(roomId);
+
+      io.to(`room-${roomId}`).emit('quiz-finished', leaderboard);
+      return;
+    }
+
+    await run(
+      'UPDATE rooms SET status = ?, current_question_id = ? WHERE id = ?',
+      ['active', nextQuestion.id, roomId]
+    );
+
+    const questionPayload = await getQuestionPayload(nextQuestion.id);
+
+    io.to(`room-${roomId}`).emit('question-show', questionPayload);
+  });
+
+  socket.on('player-submit-answer', async ({ roomId, participantId, questionId, selectedOptionIds }) => {
+    try {
+      if (!Array.isArray(selectedOptionIds) || selectedOptionIds.length === 0) {
+        socket.emit('answer-result', {
+          success: false,
+          message: 'Выберите вариант ответа'
+        });
+        return;
+      }
+
+      const room = await get(
+        'SELECT * FROM rooms WHERE id = ?',
+        [roomId]
+      );
+
+      if (!room || room.status !== 'active' || room.current_question_id !== Number(questionId)) {
+        socket.emit('answer-result', {
+          success: false,
+          message: 'Ответ сейчас недоступен'
+        });
+        return;
+      }
+
+      const participant = await get(
+        'SELECT * FROM participants WHERE id = ? AND room_id = ?',
+        [participantId, roomId]
+      );
+
+      if (!participant) {
+        socket.emit('answer-result', {
+          success: false,
+          message: 'Участник не найден'
+        });
+        return;
+      }
+
+      const existingAnswer = await get(
+        `
+        SELECT * FROM answers
+        WHERE room_id = ? AND participant_id = ? AND question_id = ?
+        LIMIT 1
+        `,
+        [roomId, participantId, questionId]
+      );
+
+      if (existingAnswer) {
+        socket.emit('answer-result', {
+          success: false,
+          message: 'Вы уже ответили на этот вопрос'
+        });
+        return;
+      }
+
+      const isCorrect = await checkAnswer(questionId, selectedOptionIds);
+
+      for (const optionId of selectedOptionIds) {
+        await run(
+          `
+          INSERT INTO answers (room_id, participant_id, question_id, option_id, is_correct)
+          VALUES (?, ?, ?, ?, ?)
+          `,
+          [roomId, participantId, questionId, optionId, isCorrect ? 1 : 0]
+        );
+      }
+
+      if (isCorrect) {
+        await run(
+          'UPDATE participants SET score = score + 1 WHERE id = ?',
+          [participantId]
+        );
+      }
+
+      socket.emit('answer-result', {
+        success: true,
+        isCorrect,
+        message: isCorrect ? 'Правильно! +1 балл' : 'Неправильно'
+      });
+
+      const participants = await all(
+        'SELECT * FROM participants WHERE room_id = ? ORDER BY score DESC, joined_at ASC',
+        [roomId]
+      );
+
+      io.to(`room-${roomId}`).emit('participants-updated', participants);
+    } catch (error) {
+      console.error(error);
+
+      socket.emit('answer-result', {
+        success: false,
+        message: 'Ошибка при отправке ответа'
+      });
+    }
+  });
+
+  socket.on('host-finish-quiz', async ({ roomId }) => {
+    await run(
+      'UPDATE rooms SET status = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ?',
+      ['finished', roomId]
+    );
+
+    const leaderboard = await getLeaderboard(roomId);
+
+    io.to(`room-${roomId}`).emit('quiz-finished', leaderboard);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Пользователь отключился:', socket.id);
   });
 });
 
@@ -277,6 +722,10 @@ app.post('/quizzes/:id/questions', requireAuth, async (req, res) => {
 
     if (!Array.isArray(correctOptions)) {
       correctOptions = [correctOptions];
+    }
+
+    if ((question_type || 'single') === 'single' && correctOptions.length > 1) {
+    correctOptions = [correctOptions[0]];
     }
 
     const optionTexts = [option_1, option_2, option_3, option_4]

@@ -12,13 +12,15 @@
       <h1 class="mb-3">VK Quiz App</h1>
       <p class="lead">MVP веб-приложения для проведения интерактивных квизов в реальном времени.</p>
 
-      <% if (user) { %>
-        <a href="/dashboard" class="btn btn-primary">Перейти в кабинет</a>
-        <a href="/logout" class="btn btn-outline-secondary">Выйти</a>
-      <% } else { %>
-        <a href="/login" class="btn btn-primary">Войти</a>
-        <a href="/register" class="btn btn-outline-primary">Регистрация</a>
-      <% } %>
+    <% if (user) { %>
+    <a href="/dashboard" class="btn btn-primary">Перейти в кабинет</a>
+    <a href="/join" class="btn btn-success">Подключиться к квизу</a>
+    <a href="/logout" class="btn btn-outline-secondary">Выйти</a>
+    <% } else { %>
+    <a href="/login" class="btn btn-primary">Войти</a>
+    <a href="/register" class="btn btn-outline-primary">Регистрация</a>
+    <a href="/join" class="btn btn-success">Подключиться к квизу</a>
+    <% } %>
     </div>
   </main>
 </body>
