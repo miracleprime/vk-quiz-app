@@ -4,6 +4,8 @@ const questionArea = document.getElementById('questionArea');
 const answerResult = document.getElementById('answerResult');
 const leaderboardArea = document.getElementById('leaderboardArea');
 
+let playerTimerInterval = null;
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll('&', '&amp;')
@@ -13,8 +15,44 @@ function escapeHtml(text) {
     .replaceAll("'", '&#039;');
 }
 
+function startPlayerTimer(endsAt) {
+  const timerElement = document.getElementById('playerTimer');
+
+  if (!timerElement || !endsAt) {
+    return;
+  }
+
+  if (playerTimerInterval) {
+    clearInterval(playerTimerInterval);
+  }
+
+  function updateTimer() {
+    const secondsLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    timerElement.textContent = secondsLeft;
+
+    if (secondsLeft <= 0) {
+      clearInterval(playerTimerInterval);
+      playerTimerInterval = null;
+    }
+  }
+
+  updateTimer();
+  playerTimerInterval = setInterval(updateTimer, 1000);
+}
+
+function disableAnswerForm() {
+  const answerForm = document.getElementById('answerForm');
+
+  if (answerForm) {
+    answerForm.querySelectorAll('input, button').forEach((element) => {
+      element.disabled = true;
+    });
+  }
+}
+
 function renderQuestion(question) {
   answerResult.innerHTML = '';
+  leaderboardArea.innerHTML = '';
 
   const inputType = question.questionType === 'multiple' ? 'checkbox' : 'radio';
 
@@ -32,6 +70,10 @@ function renderQuestion(question) {
     : '';
 
   questionArea.innerHTML = `
+    <div class="timer-box mb-3">
+      Осталось времени: <strong><span id="playerTimer">0</span> сек.</strong>
+    </div>
+
     <h2 class="h4 mb-3">${escapeHtml(question.text)}</h2>
     ${imageHtml}
 
@@ -43,6 +85,8 @@ function renderQuestion(question) {
       <button class="btn btn-primary w-100" type="submit">Ответить</button>
     </form>
   `;
+
+  startPlayerTimer(question.endsAt);
 
   const answerForm = document.getElementById('answerForm');
 
@@ -102,16 +146,24 @@ socket.on('answer-result', (result) => {
     </div>
   `;
 
-  const answerForm = document.getElementById('answerForm');
+  disableAnswerForm();
+});
 
-  if (answerForm) {
-    answerForm.querySelectorAll('input, button').forEach((element) => {
-      element.disabled = true;
-    });
-  }
+socket.on('question-closed', () => {
+  answerResult.innerHTML = `
+    <div class="alert alert-warning">
+      Время вышло. Ответить на этот вопрос уже нельзя.
+    </div>
+  `;
+
+  disableAnswerForm();
 });
 
 socket.on('quiz-finished', (leaderboard) => {
+  if (playerTimerInterval) {
+    clearInterval(playerTimerInterval);
+  }
+
   questionArea.innerHTML = `
     <div class="alert alert-success">
       Квиз завершён. Результаты ниже.

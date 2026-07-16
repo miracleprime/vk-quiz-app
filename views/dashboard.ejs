@@ -21,35 +21,100 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <h1>Личный кабинет</h1>
-        <p class="text-muted mb-0">Управление квизами и история проведённых игр.</p>
+        <p class="text-muted mb-0">
+          Создание квизов, запуск комнат и история проведённых игр.
+        </p>
       </div>
 
       <a href="/quizzes/new" class="btn btn-primary">Создать квиз</a>
     </div>
 
-    <% if (quizzes.length === 0) { %>
-      <div class="alert alert-info">
-        Пока нет созданных квизов. Нажмите «Создать квиз», чтобы добавить первый.
-      </div>
-    <% } else { %>
-      <div class="row g-3">
-        <% quizzes.forEach(function(quiz) { %>
-          <div class="col-md-4">
-            <div class="card h-100">
-              <div class="card-body">
-                <h5 class="card-title"><%= quiz.title %></h5>
-                <p class="card-text">
-                  Категория: <%= quiz.category || 'Без категории' %><br>
-                  Время на вопрос: <%= quiz.time_limit %> сек.
-                </p>
-                <a href="/quizzes/<%= quiz.id %>/edit" class="btn btn-outline-primary btn-sm">Редактировать</a>
-                <a href="/quizzes/<%= quiz.id %>/start" class="btn btn-success btn-sm">Запустить</a>
+    <section class="mb-5">
+      <h2 class="h4 mb-3">Мои квизы</h2>
+
+      <% if (quizzes.length === 0) { %>
+        <div class="alert alert-info">
+          Пока нет созданных квизов. Нажмите «Создать квиз», чтобы добавить первый.
+        </div>
+      <% } else { %>
+        <div class="row g-3">
+          <% quizzes.forEach(function(quiz) { %>
+            <div class="col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title"><%= quiz.title %></h5>
+                  <p class="card-text">
+                    Категория: <%= quiz.category || 'Без категории' %><br>
+                    Время на вопрос: <%= quiz.time_limit %> сек.
+                  </p>
+                  <a href="/quizzes/<%= quiz.id %>/edit" class="btn btn-outline-primary btn-sm">Редактировать</a>
+                  <a href="/quizzes/<%= quiz.id %>/start" class="btn btn-success btn-sm">Запустить</a>
+                </div>
               </div>
             </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <section>
+      <h2 class="h4 mb-3">История проведённых квизов</h2>
+
+      <% if (rooms.length === 0) { %>
+        <div class="alert alert-secondary">
+          История пока пустая. Запустите квиз, чтобы здесь появилась запись.
+        </div>
+      <% } else { %>
+        <div class="card">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Квиз</th>
+                  <th>Категория</th>
+                  <th>Код</th>
+                  <th>Участников</th>
+                  <th>Статус</th>
+                  <th>Дата запуска</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% rooms.forEach(function(room) { %>
+                  <tr>
+                    <td><%= room.title %></td>
+                    <td><%= room.category || 'Без категории' %></td>
+                    <td><strong><%= room.code %></strong></td>
+                    <td><%= room.participant_count %></td>
+                    <td>
+                      <% if (room.status === 'finished') { %>
+                        <span class="badge text-bg-success">Завершён</span>
+                      <% } else if (room.status === 'active') { %>
+                        <span class="badge text-bg-warning">Идёт</span>
+                      <% } else { %>
+                        <span class="badge text-bg-secondary">Ожидание</span>
+                      <% } %>
+                    </td>
+                    <td><%= room.created_at %></td>
+                    <td class="text-end">
+                        <% if (room.status === 'finished') { %>
+                        <a href="/rooms/<%= room.id %>/results" class="btn btn-outline-success btn-sm">
+                            Результаты
+                        </a>
+                        <% } else { %>
+                        <a href="/rooms/<%= room.id %>/host" class="btn btn-outline-primary btn-sm">
+                            Открыть
+                        </a>
+                        <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
           </div>
-        <% }) %>
-      </div>
-    <% } %>
+        </div>
+      <% } %>
+    </section>
   </main>
 </body>
 </html>

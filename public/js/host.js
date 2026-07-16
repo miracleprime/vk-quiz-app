@@ -5,6 +5,8 @@ const finishQuizBtn = document.getElementById('finishQuizBtn');
 const currentQuestionHost = document.getElementById('currentQuestionHost');
 const leaderboardHost = document.getElementById('leaderboardHost');
 
+let hostTimerInterval = null;
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll('&', '&amp;')
@@ -12,6 +14,31 @@ function escapeHtml(text) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function startHostTimer(endsAt) {
+  const timerElement = document.getElementById('hostTimer');
+
+  if (!timerElement || !endsAt) {
+    return;
+  }
+
+  if (hostTimerInterval) {
+    clearInterval(hostTimerInterval);
+  }
+
+  function updateTimer() {
+    const secondsLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    timerElement.textContent = secondsLeft;
+
+    if (secondsLeft <= 0) {
+      clearInterval(hostTimerInterval);
+      hostTimerInterval = null;
+    }
+  }
+
+  updateTimer();
+  hostTimerInterval = setInterval(updateTimer, 1000);
 }
 
 function renderParticipants(participants) {
@@ -56,10 +83,13 @@ function renderLeaderboard(leaderboard) {
     `;
   }).join('');
 
-  leaderboardHost.innerHTML = `
-    <h3 class="h4">Итоговый лидерборд</h3>
-    <ul class="list-group">${html}</ul>
-  `;
+leaderboardHost.innerHTML = `
+  <h3 class="h4">Итоговый лидерборд</h3>
+  <ul class="list-group mb-3">${html}</ul>
+  <a href="/rooms/${window.ROOM_ID}/results" class="btn btn-outline-success">
+    Открыть страницу результатов
+  </a>
+`;
 }
 
 socket.emit('host-join-room', {
@@ -89,13 +119,32 @@ socket.on('question-show', (question) => {
 
   currentQuestionHost.innerHTML = `
     <p class="mb-2"><strong>${escapeHtml(question.text)}</strong></p>
-    <p class="text-muted mb-0">
+    <p class="text-muted mb-2">
       Тип вопроса: ${question.questionType === 'multiple' ? 'множественный выбор' : 'одиночный выбор'}
     </p>
+    <div class="timer-box">
+      Осталось времени: <strong><span id="hostTimer">0</span> сек.</strong>
+    </div>
   `;
+
+  startHostTimer(question.endsAt);
+});
+
+socket.on('question-closed', () => {
+  if (currentQuestionHost) {
+    currentQuestionHost.innerHTML += `
+      <div class="alert alert-warning mt-3 mb-0">
+        Время на вопрос вышло. Можно запускать следующий вопрос.
+      </div>
+    `;
+  }
 });
 
 socket.on('quiz-finished', (leaderboard) => {
+  if (hostTimerInterval) {
+    clearInterval(hostTimerInterval);
+  }
+
   if (currentQuestionHost) {
     currentQuestionHost.innerHTML = `
       <div class="alert alert-success mb-0">

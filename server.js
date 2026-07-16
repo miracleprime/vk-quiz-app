@@ -12,6 +12,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = 3000;
+const roomTimers = new Map();
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -130,6 +131,47 @@ async function checkAnswer(questionId, selectedOptionIds) {
   return correctIds.every((id, index) => id === selectedIds[index]);
 }
 
+function clearRoomTimer(roomId) {
+  const key = String(roomId);
+  const timerData = roomTimers.get(key);
+
+  if (timerData) {
+    clearTimeout(timerData.timeout);
+    roomTimers.delete(key);
+  }
+}
+
+async function startRoomTimer(roomId, timeLimitSeconds) {
+  const key = String(roomId);
+  const endsAt = Date.now() + timeLimitSeconds * 1000;
+
+  clearRoomTimer(roomId);
+
+  const timeout = setTimeout(async () => {
+    await run(
+      'UPDATE rooms SET status = ? WHERE id = ?',
+      ['waiting', roomId]
+    );
+
+    roomTimers.delete(key);
+
+    io.to(`room-${roomId}`).emit('question-closed', {
+      message: 'Время вышло'
+    });
+  }, timeLimitSeconds * 1000);
+
+  roomTimers.set(key, {
+    timeout,
+    endsAt
+  });
+
+  return endsAt;
+}
+
+function getRoomTimer(roomId) {
+  return roomTimers.get(String(roomId));
+}
+
 function requireAuth(req, res, next) {
   if (!req.session.user) {
     return res.redirect('/login');
@@ -244,9 +286,31 @@ app.get('/dashboard', requireAuth, async (req, res) => {
     [req.session.user.id]
   );
 
+  const rooms = await all(
+    `
+    SELECT 
+      rooms.id,
+      rooms.code,
+      rooms.status,
+      rooms.created_at,
+      rooms.finished_at,
+      quizzes.title,
+      quizzes.category,
+      COUNT(participants.id) as participant_count
+    FROM rooms
+    JOIN quizzes ON rooms.quiz_id = quizzes.id
+    LEFT JOIN participants ON participants.room_id = rooms.id
+    WHERE quizzes.user_id = ?
+    GROUP BY rooms.id
+    ORDER BY rooms.created_at DESC
+    `,
+    [req.session.user.id]
+  );
+
   res.render('dashboard', {
     user: req.session.user,
-    quizzes
+    quizzes,
+    rooms
   });
 });
 
@@ -327,6 +391,58 @@ app.get('/rooms/:id/host', requireAuth, async (req, res) => {
       user: req.session.user,
       room,
       participants
+    });
+  } catch (error) {
+    console.error(error);
+    res.redirect('/dashboard');
+  }
+});
+
+app.get('/rooms/:id/results', requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.id;
+
+    const room = await get(
+      `
+      SELECT 
+        rooms.*,
+        quizzes.title,
+        quizzes.category,
+        quizzes.time_limit,
+        quizzes.rules,
+        quizzes.user_id
+      FROM rooms
+      JOIN quizzes ON rooms.quiz_id = quizzes.id
+      WHERE rooms.id = ?
+      `,
+      [roomId]
+    );
+
+    if (!room || room.user_id !== req.session.user.id) {
+      return res.redirect('/dashboard');
+    }
+
+    const leaderboard = await all(
+      `
+      SELECT 
+        participants.id,
+        participants.name,
+        participants.score,
+        participants.joined_at,
+        COUNT(DISTINCT answers.question_id) as answer_count
+      FROM participants
+      LEFT JOIN answers ON answers.participant_id = participants.id
+      WHERE participants.room_id = ?
+      GROUP BY participants.id
+      ORDER BY participants.score DESC, participants.joined_at ASC
+      `,
+      [roomId]
+    );
+
+    res.render('room-results', {
+      user: req.session.user,
+      room,
+      leaderboard
     });
   } catch (error) {
     console.error(error);
@@ -443,7 +559,12 @@ io.on('connection', (socket) => {
 
     if (room && room.current_question_id && room.status === 'active') {
       const questionPayload = await getQuestionPayload(room.current_question_id);
-      socket.emit('question-show', questionPayload);
+      const timerData = getRoomTimer(roomId);
+
+      socket.emit('question-show', {
+        ...questionPayload,
+        endsAt: timerData ? timerData.endsAt : null
+      });
     }
   });
 
@@ -473,11 +594,18 @@ io.on('connection', (socket) => {
 
     if (room && room.current_question_id && room.status === 'active') {
       const questionPayload = await getQuestionPayload(room.current_question_id);
-      socket.emit('question-show', questionPayload);
+      const timerData = getRoomTimer(roomId);
+
+      socket.emit('question-show', {
+        ...questionPayload,
+        endsAt: timerData ? timerData.endsAt : null
+      });
     }
   });
 
   socket.on('host-next-question', async ({ roomId }) => {
+    clearRoomTimer(roomId);
+
     const nextQuestion = await getNextQuestion(roomId);
 
     if (!nextQuestion) {
@@ -492,14 +620,31 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const roomWithQuiz = await get(
+      `
+      SELECT rooms.*, quizzes.time_limit
+      FROM rooms
+      JOIN quizzes ON rooms.quiz_id = quizzes.id
+      WHERE rooms.id = ?
+      `,
+      [roomId]
+    );
+
+    const timeLimit = Number(roomWithQuiz.time_limit) || 30;
+
     await run(
       'UPDATE rooms SET status = ?, current_question_id = ? WHERE id = ?',
       ['active', nextQuestion.id, roomId]
     );
 
+    const endsAt = await startRoomTimer(roomId, timeLimit);
     const questionPayload = await getQuestionPayload(nextQuestion.id);
 
-    io.to(`room-${roomId}`).emit('question-show', questionPayload);
+    io.to(`room-${roomId}`).emit('question-show', {
+      ...questionPayload,
+      timeLimit,
+      endsAt
+    });
   });
 
   socket.on('player-submit-answer', async ({ roomId, participantId, questionId, selectedOptionIds }) => {
@@ -597,6 +742,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('host-finish-quiz', async ({ roomId }) => {
+    clearRoomTimer(roomId);
+
     await run(
       'UPDATE rooms SET status = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ?',
       ['finished', roomId]

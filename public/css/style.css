@@ -47,3 +47,10 @@ body {
 .answer-option:hover {
   background: #f0f6ff;
 }
+
+.timer-box {
+  padding: 12px 16px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 12px;
+}
