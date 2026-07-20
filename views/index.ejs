@@ -6,22 +6,86 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-  <main class="container py-5">
-    <div class="text-center">
-      <h1 class="mb-3">VK Quiz App</h1>
-      <p class="lead">MVP веб-приложения для проведения интерактивных квизов в реальном времени.</p>
+<body class="home-page">
+  <main class="home-wrapper">
+    <nav class="home-nav">
+      <a href="/" class="home-logo">VK Quiz App</a>
 
-    <% if (user) { %>
-    <a href="/dashboard" class="btn btn-primary">Перейти в кабинет</a>
-    <a href="/join" class="btn btn-success">Подключиться к квизу</a>
-    <a href="/logout" class="btn btn-outline-secondary">Выйти</a>
-    <% } else { %>
-    <a href="/login" class="btn btn-primary">Войти</a>
-    <a href="/register" class="btn btn-outline-primary">Регистрация</a>
-    <a href="/join" class="btn btn-success">Подключиться к квизу</a>
-    <% } %>
-    </div>
+      <div class="home-nav-actions">
+        <% if (user) { %>
+          <a href="/dashboard" class="btn btn-outline-primary">Кабинет</a>
+          <a href="/join" class="btn btn-success">Подключиться</a>
+          <a href="/logout" class="btn btn-outline-secondary">Выйти</a>
+        <% } else { %>
+          <a href="/login" class="btn btn-outline-primary">Войти</a>
+          <a href="/register" class="btn btn-primary">Регистрация</a>
+          <a href="/join" class="btn btn-success">Подключиться</a>
+        <% } %>
+      </div>
+    </nav>
+
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1>
+          Создавайте квизы<br>
+          и проводите их<br>
+          в реальном времени
+        </h1>
+
+        <p>
+          Организатор создаёт вопросы, участники подключаются по коду комнаты,
+          а результаты отображаются в итоговом лидерборде.
+        </p>
+
+        <div class="hero-actions">
+          <% if (user) { %>
+            <a href="/dashboard" class="btn btn-primary btn-lg">Создать квиз</a>
+          <% } else { %>
+            <a href="/register" class="btn btn-primary btn-lg">Создать квиз</a>
+          <% } %>
+
+          <a href="/join" class="btn btn-success btn-lg">Подключиться</a>
+        </div>
+
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h3>WebSocket</h3>
+            <p>Вопросы появляются у участников в реальном времени.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3>Код комнаты</h3>
+            <p>Участники подключаются к активному квизу по короткому коду.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3>Лидерборд</h3>
+            <p>После завершения квиза отображаются баллы и победители.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-preview">
+        <div class="preview-card">
+          <div class="preview-title">Пример комнаты</div>
+          <div class="preview-code">A7K2Q</div>
+
+          <div class="preview-question">
+            <strong>Что такое HTML?</strong>
+            <div class="preview-small-title">Варианты ответа</div>
+
+            <div class="preview-option">Язык разметки</div>
+            <div class="preview-option">Язык программирования</div>
+            <div class="preview-option">База данных</div>
+            <div class="preview-option">Графический редактор</div>
+          </div>
+
+          <div class="preview-timer">
+            Осталось времени: 25 сек.
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>
